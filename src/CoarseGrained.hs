@@ -34,7 +34,7 @@ updateNextPointer firstPtr newPtr = do
     node <- readIORef firstPtr
     writeIORef firstPtr (node { next = newPtr })
 
-add :: (Eq a, Ord a) => (ListHandle a) -> a -> IO ()
+add :: (Ord a) => (ListHandle a) -> a -> IO ()
 add (ListHandle mvar) x =
     let go prevPtr = do
         prevNode <- readIORef prevPtr
@@ -50,15 +50,50 @@ add (ListHandle mvar) x =
             Node { val = y } -> if x < y then updateNextPointer prevPtr newPtr else go curPtr
             _ -> go curPtr
 
-    in withMVar mvar $ \head -> go head 
+    in withMVar mvar go
+
+contains :: (Eq a) => (ListHandle a) -> a -> IO Bool
+contains (ListHandle mvar) x =
+    let go prevPtr = do
+        prevNode <- readIORef prevPtr
+
+        case prevNode of
+            Null -> return False
+            Head { next = nextPtr } -> go nextPtr
+            Node { val = y, next = nextPtr } ->
+                if x == y then return True
+                else go nextPtr
+
+    in withMVar mvar go
+
+remove :: (Eq a) => (ListHandle a) -> a -> IO Bool
+remove (ListHandle mvar) x =
+    let go prevPtr = do
+        prevNode <- readIORef prevPtr
+
+        let curPtr = next prevNode
+        curNode <- readIORef curPtr
+
+        case curNode of
+            Null -> return False
+            Node { val = y, next = nextPtr } ->
+                if x == y then updateNextPointer prevPtr nextPtr >> return True
+                else go curPtr
+            _ -> go curPtr
+
+    in withMVar mvar go
 
 main :: IO ()
 main = do
     list <- newEmptyList
 
+    remove list 10
     add list 10
     add list 40
+    remove list 10
     add list 30
+    remove list 40
     add list 20
 
     putStrLn . show =<< toPureList list
+    putStrLn . show =<< contains list 10
