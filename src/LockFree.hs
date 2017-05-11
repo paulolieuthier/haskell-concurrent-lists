@@ -5,7 +5,7 @@ import Control.Concurrent
 import Control.Concurrent.MVar
 import Control.Monad
 
-newtype ListHandle a = ListHandle { headList :: IORef (List a) }
+newtype ListHandle a = ListHandle (IORef (List a))
 
 data List a = Node { val :: a, next :: IORef (List a) }
     | DelNode { next :: IORef (List a) }
@@ -29,7 +29,7 @@ atomCAS ptr old new =
         else (cur, False)
 
 window :: Ord a => ListHandle a -> a -> IO (Maybe (Pred a, Curr a))
-window (ListHandle { headList = head }) x =
+window (ListHandle head) x =
     let go prevPtr = do
         prevNode <- readIORef prevPtr
         let curPtr = next prevNode
@@ -55,7 +55,7 @@ window (ListHandle { headList = head }) x =
     in go head
 
 contains :: Eq a => ListHandle a -> a -> IO Bool
-contains (ListHandle { headList = head }) x =
+contains (ListHandle head) x =
     let go prevPtr = do
         prevNode <- readIORef prevPtr
         let curPtr = next prevNode
@@ -70,7 +70,7 @@ contains (ListHandle { headList = head }) x =
     in go head
 
 toPureList :: Eq a => ListHandle a -> IO [a]
-toPureList (ListHandle { headList = head }) =
+toPureList (ListHandle head) =
     let go prevPtr xs = do
         prevNode <- readIORef prevPtr
         let curPtr = next prevNode
@@ -104,7 +104,7 @@ add list x = do
                 else add list x
 
 append :: Eq a => ListHandle a -> a -> IO Bool
-append (ListHandle { headList = head }) x =
+append (ListHandle head) x =
     let go prevPtr = do
         prevNode <- readIORef prevPtr
         let curPtr = next prevNode
@@ -158,7 +158,7 @@ remove list x = do
 
 main = do
     head <- newIORef . Head =<< newIORef Null
-    let list = ListHandle { headList = head } :: (ListHandle Int)
+    let list = (ListHandle head) :: (ListHandle Int)
 
     append list 10
     append list 20
