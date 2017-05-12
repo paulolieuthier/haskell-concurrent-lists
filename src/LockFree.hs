@@ -157,21 +157,19 @@ main = do
     add list 25
     remove list 30
 
-    {-mvar <-newMVar 0-}
+    {-mvar <- newMVar 0-}
 
-    {-forM_ [0..3] $ \_ -> forkIO $ do-}
-        {-results <- forM [1..1000] $ \i -> do-}
-            {-threadDelay 100-}
-            {-b <- append list i-}
+    {-forM_ [0..100] $ \_ -> forkIO $ do-}
+        {-results <- forM [1..10] $ \i -> do-}
+            {-b <- add list i-}
             {-if (not b) then return . Just $ i-}
             {-else return Nothing-}
         {-putMVar mvar =<< fmap (+ 1) (takeMVar mvar)-}
 
-    {-forM_ [4..7] $ \_ -> do-}
-        {-threadDelay 100-}
+    {-forM_ [0..100] $ \_ -> do-}
         {-forkIO $ do-}
-            {-results <- forM [1..1000] $ \i -> do-}
-                {-b <- delete list i-}
+            {-results <- forM [1..10] $ \i -> do-}
+                {-b <- remove list i-}
                 {-if (not b) then return . Just $ i-}
                 {-else return Nothing-}
             {-putMVar mvar =<< fmap (+ 1) (takeMVar mvar)-}
@@ -181,9 +179,5 @@ main = do
         {-if (counter /= 8) then putMVar mvar counter >> wait-}
         {-else return ()-}
     {-wait-}
-
-    {-forM_ results $ \list -> do-}
-        {-putStrLn . show $ list-}
-        {-putStrLn $ show $ length $ dropWhile (\_ -> True) list-}
 
     putStrLn . show =<< toPureList list
