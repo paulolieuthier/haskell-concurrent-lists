@@ -86,40 +86,26 @@ toPureList (ListHandle head) =
     in go head []
 
 add :: (Eq a, Ord a) => ListHandle a -> a -> IO Bool
-add list x = do
-    win <- window list x
-    case win of
-        Nothing -> return False
-        Just (prevPtr, curPtr) -> do
-            curNode@(Node { val = y }) <- readIORef curPtr
-            if (x == y) then return False
-            else do
-                let node = Node { val = x, next = curPtr }
-                newNode <- newIORef node
-
-                prevNode <- readIORef prevPtr
-                let newPrev = case prevNode of
-                        Head {} -> Head { next = newNode }
-                        Node { val = v } -> Node { val = v, next = newNode }
-
-                b <- atomCAS prevPtr prevNode newPrev
-                if b then return True
-                else add list x
-
-append :: Eq a => ListHandle a -> a -> IO Bool
-append (ListHandle head) x =
+add (ListHandle head) x =
     let go prevPtr = do
         prevNode <- readIORef prevPtr
+
         let curPtr = next prevNode
         curNode <- readIORef curPtr
+
+        let newNode = Node x curPtr
+        newPtr <- newIORef newNode
         
         case curNode of
             Node { val = y, next = nextNode } -> do
                 if (x == y) then return False
-                else go curPtr
+                else if (x > y) then go curPtr
+                else do
+                    b <- atomCAS prevPtr prevNode (prevNode { next = newPtr })
+                    if b then return True
+                    else go prevPtr
             Null -> do
-                new <- return . Node x =<< newIORef Null
-                b <- atomCAS curPtr curNode new
+                b <- atomCAS prevPtr prevNode (prevNode { next = newPtr })
                 if b then return True
                 else go prevPtr
             DelNode { next = nextNode } ->
@@ -162,10 +148,10 @@ remove list x = do
 main = do
     list <- newEmptyList
 
-    append list 10
-    append list 20
-    append list 20
-    append list 30
+    add list 10
+    add list 20
+    add list 20
+    add list 30
     add list 15
     remove list 20
     add list 25
