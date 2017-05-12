@@ -22,6 +22,9 @@ instance Show a => Show (List a) where
 type Pred a = IORef (List a)
 type Curr a = IORef (List a)
 
+newEmptyList :: IO (ListHandle a)
+newEmptyList = return . ListHandle =<< newIORef . Head =<< newIORef Null
+
 atomCAS :: Eq a => IORef a -> a -> a -> IO Bool
 atomCAS ptr old new =
     atomicModifyIORef ptr $ \cur ->
@@ -157,8 +160,7 @@ remove list x = do
                     return True
 
 main = do
-    head <- newIORef . Head =<< newIORef Null
-    let list = (ListHandle head) :: (ListHandle Int)
+    list <- newEmptyList
 
     append list 10
     append list 20
