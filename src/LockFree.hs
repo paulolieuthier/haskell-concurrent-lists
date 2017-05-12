@@ -155,7 +155,7 @@ remove list x = do
                             let newHead = Head { next = nextPtr }
                             atomCAS prevPtr prevNode newHead
                         Node { val = v } -> do
-                            let newNode = Node { val = y, next = nextPtr }
+                            let newNode = Node { val = v, next = nextPtr }
                             atomCAS prevPtr prevNode newNode
                     return True
 
