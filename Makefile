@@ -8,3 +8,7 @@ LockFree: src/LockFree.hs
 CoarseGrained: src/CoarseGrained.hs
 	ghc -threaded src/CoarseGrained.hs -outputdir bin -o bin/CoarseGrained
 	./bin/CoarseGrained +RTS -N
+
+FineGrained: src/FineGrained.hs
+	ghc -threaded src/FineGrained.hs -outputdir bin -o bin/FineGrained
+	./bin/FineGrained +RTS -N
