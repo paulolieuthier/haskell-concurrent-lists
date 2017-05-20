@@ -12,3 +12,7 @@ CoarseGrained: src/CoarseGrained.hs
 FineGrained: src/FineGrained.hs
 	ghc -threaded src/FineGrained.hs -outputdir bin -o bin/FineGrained
 	./bin/FineGrained +RTS -N
+
+Optimistic: src/Optimistic.hs
+	ghc -threaded src/Optimistic.hs -outputdir bin -o bin/Optimistic
+	./bin/Optimistic +RTS -N
