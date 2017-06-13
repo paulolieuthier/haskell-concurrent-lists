@@ -27,14 +27,14 @@ toPureList :: ListHandle a -> IO [a]
 toPureList (ListHandle head) =
     let go predPtr predNode predMVar acc = do
         let currPtr = next predNode
-        (curNode, curMVar, currMark) <- readIORef currPtr
+        (currNode, curMVar, currMark) <- readIORef currPtr
         takeMVar curMVar
         currMarked <- readIORef currMark
-        case curNode of
+        case currNode of
             Node { val = y, next = nextNode } -> do
                 let list = if currMarked then acc else (y:acc)
                 putMVar predMVar ()
-                go currPtr curNode curMVar list 
+                go currPtr currNode curMVar list 
             Null -> do
                 putMVar predMVar ()
                 putMVar curMVar ()
@@ -55,9 +55,9 @@ searchUnsafely :: Ord a => Pointer a -> a -> IO (Pointer a, Pointer a)
 searchUnsafely predPtr x = do
     (predNode, _, _) <- readIORef predPtr
     let currPtr = next predNode
-    (curNode, _, _) <- readIORef currPtr
+    (currNode, _, _) <- readIORef currPtr
 
-    case curNode of
+    case currNode of
         Null -> return (predPtr, currPtr)
         Node { val = y } -> do
             if y < x then searchUnsafely currPtr x
@@ -67,7 +67,7 @@ add :: (Eq a, Ord a) => ListHandle a -> a -> IO Bool
 add list@(ListHandle headPtr) x = do
     (predPtr, currPtr) <- searchUnsafely headPtr x
     (predNode, predMVar, predMark) <- readIORef predPtr
-    (curNode, curMVar, currMark) <- readIORef currPtr
+    (currNode, curMVar, currMark) <- readIORef currPtr
 
     let insert predNode predPtr = do
         let newNode = Node x currPtr
