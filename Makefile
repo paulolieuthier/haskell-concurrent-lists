@@ -16,3 +16,7 @@ FineGrained: src/FineGrained.hs
 Optimistic: src/Optimistic.hs
 	ghc -threaded src/Optimistic.hs -outputdir bin -o bin/Optimistic
 	./bin/Optimistic +RTS -N
+
+Lazy: src/Lazy.hs
+	ghc -threaded src/Lazy.hs -outputdir bin -o bin/Lazy
+	./bin/Lazy +RTS -N
