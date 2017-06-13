@@ -100,47 +100,58 @@ add list@(ListHandle headPtr) x = do
     (predPtr, curPtr) <- searchUnsafely headPtr x
     (predNode, predMVar) <- readIORef predPtr
     (curNode, curMVar) <- readIORef curPtr
+
+    let insert predNode predPtr = do
+        let newNode = Node x curPtr
+        newPtr <- newIORef =<< ((,) newNode) <$> newMVar ()
+        let newPredNode = predNode { next = newPtr }
+        writeIORef predPtr (newPredNode, predMVar)
     
     let validationAndInsertion = do
         isValid <- validate headPtr predPtr predNode curPtr
-        if isValid then do
-            let newNode = Node x curPtr
-            newPtr <- newIORef =<< ((,) newNode) <$> newMVar ()
-            writeIORef predPtr ((predNode { next = newPtr }, predMVar))
-            return True
-        else add list x 
+        if not isValid then return Nothing
+        else do
+            canBeAdded <- case predNode of
+                Head {} -> insert predNode predPtr >> return True
+                Node { val = y } ->
+                    if y == x then return False
+                    else insert predNode predPtr >> return True
+            return $ Just canBeAdded
 
-    bracket
+    maybeSuccessful <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])
-        (\_ -> mapM_ (flip putMVar ()) [predMVar, curMVar])
-        (\_ -> case curNode of
-            Node { val = y } ->
-                if y == x then return False
-                else validationAndInsertion
-            Null -> validationAndInsertion)
+        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        validationAndInsertion
+
+    maybe (add list x) (return) maybeSuccessful
 
 remove :: (Eq a, Ord a) => ListHandle a -> a -> IO Bool
 remove list@(ListHandle headPtr) x = do
     (predPtr, curPtr) <- searchUnsafely headPtr x
     (predNode, predMVar) <- readIORef predPtr
     (curNode, curMVar) <- readIORef curPtr
+
+    let delete = do
+        let newPredNode = predNode { next = next curNode }
+        writeIORef predPtr (newPredNode, predMVar)
     
     let validationAndRemoval = do
         isValid <- validate headPtr predPtr predNode curPtr
-        if isValid then do
-            let nextPtr = next curNode
-            writeIORef predPtr ((predNode { next = nextPtr }, predMVar))
-            return True
-        else add list x 
+        if not isValid then return Nothing
+        else do
+            canBeRemoved <- case curNode of
+                Head {} -> delete >> return True
+                Node { val = y } ->
+                    if y == x then delete >> return True
+                    else return False
+            return $ Just canBeRemoved
 
-    bracket
+    maybeSuccessful <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])
-        (\_ -> mapM_ (flip putMVar ()) [predMVar, curMVar])
-        (\_ -> case curNode of
-            Node { val = y } ->
-                if y == x then validationAndRemoval
-                else return False
-            Null -> return False)
+        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        validationAndRemoval
+
+    maybe (remove list x) return maybeSuccessful
 
 main :: IO ()
 main = do
