@@ -71,28 +71,27 @@ add list@(ListHandle headPtr) x = do
 
     let insert predNode predPtr = do
         let newNode = Node x currPtr
-        -- let newPredNode = (predNode { next = newPtr })
         newPtr <- newIORef =<< ((,,) newNode) <$> newMVar () <*> newIORef False
-        writeIORef predPtr =<< ((,,) (predNode { next = newPtr })) <$> pure predMVar <*> newIORef False
-        return True
+        let newPredNode = predNode { next = newPtr }
+        writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> newIORef False
 
     let validationAndInsertion = do
         isValid <- validate predNode currPtr predMark currMark
-        if not isValid then return False
-        else case predNode of
-            Head {} -> insert predNode predPtr
-            Node { val = y } ->
-                if y == x then return False
-                else insert predNode predPtr
+        if not isValid then return Nothing
+        else do 
+            canBeAdded <- case predNode of
+                Head {} -> insert predNode predPtr >> return True
+                Node { val = y } ->
+                    if y == x then return False
+                    else insert predNode predPtr >> return True
+            return $ Just canBeAdded
 
-    bracket
+    maybeSuccessfull <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])
-        (\_ -> mapM_ (flip putMVar ()) [predMVar, curMVar])
-        (\_ -> case curNode of
-            Node { val = y } ->
-                if y == x then return False
-                else validationAndInsertion
-            Null -> validationAndInsertion)
+        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        (validationAndInsertion)
+
+    maybe (add list x) return maybeSuccessfull
 
 main :: IO ()
 main = do
