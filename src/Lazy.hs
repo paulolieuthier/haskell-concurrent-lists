@@ -93,6 +93,35 @@ add list@(ListHandle headPtr) x = do
 
     maybe (add list x) return maybeSuccessfull
 
+remove :: (Eq a, Ord a) => ListHandle a -> a -> IO Bool
+remove list@(ListHandle headPtr) x = do
+    (predPtr, currPtr) <- searchUnsafely headPtr x
+    (predNode, predMVar, predMark) <- readIORef predPtr
+    (currNode, curMVar, currMark) <- readIORef currPtr
+
+    let delete predNode predPtr = do
+        atomicWriteIORef currMark True
+        let newPredNode = predNode { next = next currNode }
+        writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> pure predMark
+
+    let validationAndRemoval = do
+        isValid <- validate predNode currPtr predMark currMark
+        if not isValid then return Nothing
+        else do 
+            canBeAdded <- case predNode of
+                Head {} -> delete predNode predPtr >> return True
+                Node { val = y } ->
+                    if y == x then return False
+                    else delete predNode predPtr >> return True
+            return $ Just canBeAdded
+
+    maybeSuccessfull <- bracket_
+        (mapM_ takeMVar [predMVar, curMVar])
+        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        validationAndRemoval
+
+    maybe (remove list x) return maybeSuccessfull
+
 main :: IO ()
 main = do
     list <- newEmptyList
@@ -100,5 +129,7 @@ main = do
     add list 30
     add list 20
     add list 50
+    remove list 30
+    remove list 40
 
     putStrLn . show =<< toPureList list
