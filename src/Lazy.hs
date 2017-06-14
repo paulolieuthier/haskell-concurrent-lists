@@ -122,6 +122,24 @@ remove list@(ListHandle headPtr) x = do
 
     maybe (remove list x) return maybeSuccessfull
 
+contains :: Ord a => ListHandle a -> a -> IO Bool
+contains list@(ListHandle headPtr) x = do
+    (headNode, _, _) <- readIORef headPtr
+    maybeCurr <- findCurr (next headNode) x
+    case maybeCurr of
+        Nothing -> return False
+        Just (currVal, currMark) -> do
+            currMarked <- readIORef currMark
+            return $ x == currVal && not currMarked
+    where
+        findCurr currPtr val = do
+            (currNode, _, currMark) <- readIORef currPtr
+            case currNode of
+                Null -> return Nothing
+                Node { val = y } ->
+                    if y < x then findCurr (next currNode) val
+                    else return $ Just (y, currMark)
+
 main :: IO ()
 main = do
     list <- newEmptyList
@@ -131,5 +149,7 @@ main = do
     add list 50
     remove list 30
     remove list 40
+    putStrLn . show =<< contains list 20
+    putStrLn . show =<< contains list 40
 
     putStrLn . show =<< toPureList list
