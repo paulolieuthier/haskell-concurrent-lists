@@ -1,7 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 
 module Lib
-    ( newEmptyList
+    ( ThreadSafeList(..)
+    , ListType(..)
+    , newEmptyList
     , add
     , remove
     , toPureList
