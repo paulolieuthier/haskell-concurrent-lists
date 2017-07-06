@@ -10,6 +10,7 @@ main = hspec $ do
         describe (show listType ++ " implementation") $ do
             testInsertions listType
             testRemovals listType
+            testContains listType
 
 testInsertions listType = do
     it "should insert in empty list" $ do
@@ -75,3 +76,18 @@ testRemovals listType = do
 
         list <- L.toPureList safeList
         list `shouldBe` [1, 3]
+
+testContains listType = do
+    it "should not find element not in list" $ do
+        forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
+            safeList <- L.fromList listType pureList
+
+            result <- L.contains safeList 42
+            result `shouldBe` False
+
+    it "should find element in list" $ do
+        forM_ [[42], [41, 42], [42, 43], [41, 42, 43]] $ \pureList -> do
+            safeList <- L.fromList listType pureList
+
+            result <- L.contains safeList 42
+            result `shouldBe` True
