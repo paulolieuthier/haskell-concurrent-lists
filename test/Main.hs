@@ -8,11 +8,12 @@ main :: IO ()
 main = hspec $ do
     forM_ L.allTypes $ \listType -> do
         describe (show listType ++ " implementation") $ do
-            testInsertions listType
-            testRemovals listType
-            testContains listType
+            testSimpleInsertions listType
+            testSimpleRemovals listType
+            testSimpleContains listType
+            testSimpleMix listType
 
-testInsertions listType = do
+testSimpleInsertions listType = do
     it "should insert in empty list" $ do
         safeList <- L.newEmptyList listType
         L.add safeList 42
@@ -39,7 +40,7 @@ testInsertions listType = do
         list <- L.toPureList safeList
         list `shouldBe` [42]
 
-testRemovals listType = do
+testSimpleRemovals listType = do
     it "should not remove missing element on list" $ do
         forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
             safeList <- L.fromList listType pureList
@@ -77,7 +78,7 @@ testRemovals listType = do
         list <- L.toPureList safeList
         list `shouldBe` [1, 3]
 
-testContains listType = do
+testSimpleContains listType = do
     it "should not find element not in list" $ do
         forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
             safeList <- L.fromList listType pureList
@@ -91,3 +92,23 @@ testContains listType = do
 
             result <- L.contains safeList 42
             result `shouldBe` True
+
+testSimpleMix listType = do
+    it "should containt at first but not after removal" $ do
+        forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
+            safeList <- L.fromList listType pureList
+
+            result <- L.contains safeList 42
+            result `shouldBe` False
+
+            result <- L.add safeList 42
+            result `shouldBe` True
+
+            result <- L.contains safeList 42
+            result `shouldBe` True
+
+            result <- L.remove safeList 42
+            result `shouldBe` True
+
+            result <- L.contains safeList 42
+            result `shouldBe` False
