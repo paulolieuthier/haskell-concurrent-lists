@@ -124,20 +124,20 @@ remove list@(OptimisticList headPtr) x = do
     (curNode, curMVar) <- readIORef curPtr
 
     let
+        delete = do
+            let newPredNode = predNode { next = next curNode }
+            writeIORef predPtr (newPredNode, predMVar)
+
         validationAndRemoval = do
             isValid <- validate headPtr predPtr predNode curPtr
             if not isValid then return Nothing
             else do
                 canBeRemoved <- case curNode of
-                    Head {} -> delete >> return True
                     Node { val = y } ->
                         if y == x then delete >> return True
                         else return False
+                    Null -> return False
                 return $ Just canBeRemoved
-
-        delete = do
-            let newPredNode = predNode { next = next curNode }
-            writeIORef predPtr (newPredNode, predMVar)
 
     maybeSuccessful <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])

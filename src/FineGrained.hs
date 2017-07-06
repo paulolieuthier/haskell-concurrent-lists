@@ -90,16 +90,16 @@ remove (FineGrainedList head) x =
             curNode <- takeMVar curPtr
             case curNode of
                 Node { val = y, next = nextNode } ->
-                    if (x > y) then do
-                        putMVar prevPtr prevNode
+                    if (x < y) then do
                         putMVar curPtr curNode
+                        putMVar prevPtr prevNode
                         return False
-                    else if (x < y) then do
+                    else if (x > y) then do
                         putMVar prevPtr prevNode
                         go curPtr curNode
                     else do
-                        putMVar prevPtr (prevNode { next = next curNode })
                         putMVar curPtr curNode
+                        putMVar prevPtr (prevNode { next = next curNode })
                         return True
                 Null -> do
                     putMVar prevPtr prevNode
