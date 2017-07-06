@@ -95,11 +95,11 @@ add list@(LazyList headPtr) x = do
             isValid <- validate predNode currPtr predMark currMark
             if not isValid then return Nothing
             else do 
-                canBeAdded <- case predNode of
-                    Head {} -> insert >> return True
+                canBeAdded <- case currNode of
                     Node { val = y } ->
                         if y == x then return False
                         else insert >> return True
+                    Null {} -> insert >> return True
                 return $ Just canBeAdded
 
     maybeSuccessfull <- bracket_

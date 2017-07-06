@@ -103,11 +103,11 @@ add list@(OptimisticList headPtr) x = do
             isValid <- validate headPtr predPtr predNode curPtr
             if not isValid then return Nothing
             else do
-                canBeAdded <- case predNode of
-                    Head {} -> insert >> return True
+                canBeAdded <- case curNode of
                     Node { val = y } ->
                         if y == x then return False
                         else insert >> return True
+                    Null {} -> insert >> return True
                 return $ Just canBeAdded
 
     maybeSuccessful <- bracket_
@@ -115,7 +115,7 @@ add list@(OptimisticList headPtr) x = do
         (mapM_ (flip putMVar ()) [predMVar, curMVar])
         validationAndInsertion
 
-    maybe (add list x) (return) maybeSuccessful
+    maybe (add list x) return maybeSuccessful
 
 remove :: (Eq a, Ord a) => OptimisticList a -> a -> IO Bool
 remove list@(OptimisticList headPtr) x = do
