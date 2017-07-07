@@ -84,7 +84,7 @@ window (LockFreeList head) x = go head
                     else go curPtr
                 Null -> return Nothing
 
-add :: (Eq a, Ord a) => LockFreeList a -> a -> IO Bool
+add :: (Eq a, Ord a) => LockFreeList a -> a -> IO ()
 add (LockFreeList head) x = go head
     where
         go prevPtr = do
@@ -98,18 +98,17 @@ add (LockFreeList head) x = go head
             
             case curNode of
                 Node { val = y, next = nextNode } -> do
-                    if (x == y) then return False
-                    else if (x > y) then go curPtr
+                    if (x > y) then go curPtr
                     else do
                         let newPredNode = prevNode { next = newPtr }
                         b <- atomCAS prevPtr prevNode newPredNode
-                        if b then return True
+                        if b then return ()
                         else go prevPtr
 
                 Null -> do
                     let newPredNode = prevNode { next = newPtr }
                     b <- atomCAS prevPtr prevNode newPredNode
-                    if b then return True
+                    if b then return ()
                     else go prevPtr
 
                 DelNode { next = nextNode } ->

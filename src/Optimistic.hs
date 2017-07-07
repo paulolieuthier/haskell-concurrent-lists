@@ -11,10 +11,12 @@ module Optimistic
 
 import Control.Concurrent.MVar
 import Control.Exception
+import Control.Monad
 import Data.IORef
 import qualified ThreadSafeList as TSL
 
 type Pointer a = IORef (List a, MVar ())
+type PointerAndData a = (Pointer a, MVar ())
 newtype OptimisticList a = OptimisticList (Pointer a)
 
 instance (Eq a, Ord a) => TSL.ThreadSafeList OptimisticList a where
@@ -74,86 +76,95 @@ validate headPtr predPtr predNode curPtr = go headPtr
                                 then return $ nextPtr == curPtr
                                 else go nextNodePtr
 
-searchUnsafely :: Ord a => Pointer a -> a -> IO (Pointer a, Pointer a)
+searchUnsafely :: Ord a => Pointer a -> a -> IO (PointerAndData a, PointerAndData a)
 searchUnsafely predPtr x = do
-    (predNode, _) <- readIORef predPtr
-    let curPtr = next predNode
-    (curNode, _) <- readIORef curPtr
-
-    case curNode of
-        Null -> return (predPtr, curPtr)
-        Node { val = y } -> do
-            if y < x then searchUnsafely curPtr x
-            else return (predPtr, curPtr)
-
-add :: (Eq a, Ord a) => OptimisticList a -> a -> IO Bool
-add list@(OptimisticList headPtr) x = do
-    (predPtr, curPtr) <- searchUnsafely headPtr x
     (predNode, predMVar) <- readIORef predPtr
+    let curPtr = next predNode
     (curNode, curMVar) <- readIORef curPtr
 
+    let predStuff = (predPtr, predMVar)
+    let curStuff = (curPtr, curMVar)
+
+    case curNode of
+        Null -> return (predStuff, curStuff)
+        Node { val = y } -> do
+            if y < x then searchUnsafely curPtr x
+            else return (predStuff, curStuff)
+
+add :: (Eq a, Ord a) => OptimisticList a -> a -> IO ()
+add list@(OptimisticList headPtr) x = do
+    (predStuff, curStuff) <- searchUnsafely headPtr x
+    let (predPtr, predMVar) = predStuff
+    let (curPtr, curMVar) = curStuff
+
     let
-        insert = do
+        insert predNode = do
             let newNode = Node x curPtr
             newPtr <- newIORef =<< ((,) newNode) <$> newMVar ()
             let newPredNode = predNode { next = newPtr }
             writeIORef predPtr (newPredNode, predMVar)
 
         validationAndInsertion = do
+            (predNode, _) <- readIORef predPtr
+            (curNode, _) <- readIORef curPtr
+
             isValid <- validate headPtr predPtr predNode curPtr
-            if not isValid then return Nothing
-            else do
-                canBeAdded <- case curNode of
-                    Node { val = y } ->
-                        if y == x then return False
-                        else insert >> return True
-                    Null {} -> insert >> return True
-                return $ Just canBeAdded
+            when isValid $ insert predNode
+            return isValid
 
     maybeSuccessful <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])
-        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        (mapM_ (flip putMVar ()) [curMVar, predMVar])
         validationAndInsertion
 
-    maybe (add list x) return maybeSuccessful
+    if maybeSuccessful then return ()
+    else add list x
 
 remove :: (Eq a, Ord a) => OptimisticList a -> a -> IO Bool
 remove list@(OptimisticList headPtr) x = do
-    (predPtr, curPtr) <- searchUnsafely headPtr x
-    (predNode, predMVar) <- readIORef predPtr
-    (curNode, curMVar) <- readIORef curPtr
+    (predStuff, curStuff) <- searchUnsafely headPtr x
+    let (predPtr, predMVar) = predStuff
+    let (curPtr, curMVar) = curStuff
 
     let
-        delete = do
+        delete predNode curNode = do
             let newPredNode = predNode { next = next curNode }
             writeIORef predPtr (newPredNode, predMVar)
 
         validationAndRemoval = do
+            (predNode, _) <- readIORef predPtr
+            (curNode, _) <- readIORef curPtr
+
             isValid <- validate headPtr predPtr predNode curPtr
             if not isValid then return Nothing
             else do
                 canBeRemoved <- case curNode of
                     Node { val = y } ->
-                        if y == x then delete >> return True
+                        if y == x then do
+                            delete predNode curNode
+                            return True
                         else return False
                     Null -> return False
                 return $ Just canBeRemoved
 
     maybeSuccessful <- bracket_
         (mapM_ takeMVar [predMVar, curMVar])
-        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        (mapM_ (flip putMVar ()) [curMVar, predMVar])
         validationAndRemoval
 
     maybe (remove list x) return maybeSuccessful
 
 contains :: (Eq a, Ord a) => OptimisticList a -> a -> IO Bool
 contains list@(OptimisticList headPtr) x = do
-    (predPtr, curPtr) <- searchUnsafely headPtr x
-    (predNode, predMVar) <- readIORef predPtr
-    (curNode, curMVar) <- readIORef curPtr
+    (predStuff, curStuff) <- searchUnsafely headPtr x
+    let (predPtr, predMVar) = predStuff
+    let (curPtr, curMVar) = curStuff
 
     let
         validationAndCheck = do
+            (predNode, _) <- readIORef predPtr
+            (curNode, _) <- readIORef curPtr
+
             isValid <- validate headPtr predPtr predNode curPtr
             if not isValid then return Nothing
             else case curNode of

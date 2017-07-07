@@ -17,6 +17,7 @@ import qualified ThreadSafeList as TSL
 
 type Mark = IORef Bool
 type Pointer a = IORef (List a, MVar (), Mark)
+type PointerAndData a = (Pointer a, MVar ())
 newtype LazyList a = LazyList (Pointer a)
 
 instance (Eq a, Ord a) => TSL.ThreadSafeList LazyList a where
@@ -66,75 +67,81 @@ validate predNode currPtr predMark currMark = do
 
     return $ (not predMarked) && (not currMarked) && (next predNode == currPtr)
 
-searchUnsafely :: Ord a => Pointer a -> a -> IO (Pointer a, Pointer a)
+searchUnsafely :: Ord a => Pointer a -> a -> IO (PointerAndData a, PointerAndData a)
 searchUnsafely predPtr x = do
-    (predNode, _, _) <- readIORef predPtr
+    (predNode, predMVar, predMark) <- readIORef predPtr
     let currPtr = next predNode
-    (currNode, _, _) <- readIORef currPtr
+    (currNode, currMVar, currMark) <- readIORef currPtr
+
+    let predStuff = (predPtr, predMVar)
+    let currStuff = (currPtr, currMVar)
 
     case currNode of
-        Null -> return (predPtr, currPtr)
+        Null -> return (predStuff, currStuff)
         Node { val = y } -> do
             if y < x then searchUnsafely currPtr x
-            else return (predPtr, currPtr)
+            else return (predStuff, currStuff)
 
-add :: (Eq a, Ord a) => LazyList a -> a -> IO Bool
+add :: (Eq a, Ord a) => LazyList a -> a -> IO ()
 add list@(LazyList headPtr) x = do
-    (predPtr, currPtr) <- searchUnsafely headPtr x
-    (predNode, predMVar, predMark) <- readIORef predPtr
-    (currNode, curMVar, currMark) <- readIORef currPtr
+    (predStuff, currStuff) <- searchUnsafely headPtr x
+    let (predPtr, predMVar) = predStuff
+    let (currPtr, currMVar) = currStuff
 
     let
-        insert = do
+        insert predNode = do
             let newNode = Node x currPtr
             newPtr <- newIORef =<< ((,,) newNode) <$> newMVar () <*> newIORef False
             let newPredNode = predNode { next = newPtr }
             writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> newIORef False
 
         validationAndInsertion = do
+            (predNode, _, predMark) <- readIORef predPtr
+            (currNode, _, currMark) <- readIORef currPtr
+
             isValid <- validate predNode currPtr predMark currMark
-            if not isValid then return Nothing
-            else do 
-                canBeAdded <- case currNode of
-                    Node { val = y } ->
-                        if y == x then return False
-                        else insert >> return True
-                    Null {} -> insert >> return True
-                return $ Just canBeAdded
+            when isValid $ insert predNode
+            return isValid
 
     maybeSuccessfull <- bracket_
-        (mapM_ takeMVar [predMVar, curMVar])
-        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        (mapM_ takeMVar [predMVar, currMVar])
+        (mapM_ (flip putMVar ()) [currMVar, predMVar])
         validationAndInsertion
 
-    maybe (add list x) return maybeSuccessfull
+    if maybeSuccessfull then return ()
+    else add list x
 
 remove :: (Eq a, Ord a) => LazyList a -> a -> IO Bool
 remove list@(LazyList headPtr) x = do
-    (predPtr, currPtr) <- searchUnsafely headPtr x
-    (predNode, predMVar, predMark) <- readIORef predPtr
-    (currNode, curMVar, currMark) <- readIORef currPtr
+    (predStuff, currStuff) <- searchUnsafely headPtr x
+    let (predPtr, predMVar) = predStuff
+    let (currPtr, currMVar) = currStuff
 
     let
-        delete = do
+        delete predNode predMark currNode currMark = do
             atomicWriteIORef currMark True
             let newPredNode = predNode { next = next currNode }
             writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> pure predMark
 
         validationAndRemoval = do
+            (predNode, _, predMark) <- readIORef predPtr
+            (currNode, _, currMark) <- readIORef currPtr
+
             isValid <- validate predNode currPtr predMark currMark
             if not isValid then return Nothing
             else do 
                 canBeAdded <- case currNode of
                     Node { val = y } ->
-                        if y == x then delete >> return True
+                        if y == x then do
+                            delete predNode predMark currNode currMark
+                            return True
                         else return False
                     Null -> return False
                 return $ Just canBeAdded
 
     maybeSuccessfull <- bracket_
-        (mapM_ takeMVar [predMVar, curMVar])
-        (mapM_ (flip putMVar ()) [predMVar, curMVar])
+        (mapM_ takeMVar [predMVar, currMVar])
+        (mapM_ (flip putMVar ()) [currMVar, predMVar])
         validationAndRemoval
 
     maybe (remove list x) return maybeSuccessfull

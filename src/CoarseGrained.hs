@@ -49,7 +49,7 @@ updateNextPointer firstPtr newPtr = do
     node <- readIORef firstPtr
     writeIORef firstPtr (node { next = newPtr })
 
-add :: (Ord a) => (CoarseGrainedList a) -> a -> IO Bool
+add :: (Ord a) => (CoarseGrainedList a) -> a -> IO ()
 add (CoarseGrainedList mvar) x =
     let
         go prevPtr = do
@@ -62,14 +62,11 @@ add (CoarseGrainedList mvar) x =
             newPtr <- newIORef newNode
 
             case curNode of
-                Null -> updateNextPointer prevPtr newPtr >> return True
+                Null -> updateNextPointer prevPtr newPtr
                 Node { val = y } ->
-                    if x == y then return False
-                    else if x < y then do
-                        updateNextPointer prevPtr newPtr
-                        return True
+                    if x <= y then updateNextPointer prevPtr newPtr
                     else go curPtr
-                _ -> go curPtr >> return True
+                _ -> go curPtr
 
     in withMVar mvar go
 

@@ -49,7 +49,7 @@ fromList listType list = do
 toPureList :: ThreadSafeList a -> IO [a]
 toPureList (ThreadSafeList l) = TSL.toPureList l
 
-add :: ThreadSafeList a -> a -> IO Bool
+add :: ThreadSafeList a -> a -> IO ()
 add (ThreadSafeList l) x = TSL.add l x
 
 remove :: ThreadSafeList a -> a -> IO Bool

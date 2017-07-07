@@ -50,7 +50,7 @@ toPureList (FineGrainedList head) =
         startNode <- takeMVar startPtr
         go startPtr startNode []
 
-add :: (Eq a, Ord a) => FineGrainedList a -> a -> IO Bool
+add :: (Eq a, Ord a) => FineGrainedList a -> a -> IO ()
 add (FineGrainedList head) x =
     let
         go prevPtr prevNode = do
@@ -58,11 +58,7 @@ add (FineGrainedList head) x =
             curNode <- takeMVar curPtr
             case curNode of
                 Node { val = y, next = nextNode } ->
-                    if (x == y) then do
-                        putMVar prevPtr prevNode
-                        putMVar curPtr curNode
-                        return False
-                    else if (x > y) then do
+                    if (x > y) then do
                         putMVar prevPtr prevNode
                         go curPtr curNode
                     else do
@@ -70,13 +66,11 @@ add (FineGrainedList head) x =
                         newPtr <- newMVar newNode
                         putMVar prevPtr (prevNode { next = newPtr })
                         putMVar curPtr curNode
-                        return True
                 Null -> do
                     let newNode = Node { val = x, next = curPtr }
                     newPtr <- newMVar newNode
                     putMVar prevPtr (prevNode { next = newPtr })
                     putMVar curPtr curNode
-                    return True
     in do
         startPtr <- readIORef head
         startNode <- takeMVar startPtr

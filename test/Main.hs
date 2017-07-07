@@ -32,13 +32,13 @@ testSimpleInsertions listType = do
         list <- L.toPureList safeList
         list `shouldBe` [40, 42]
 
-    it "should not insert already existing value" $ do
+    it "should allow duplicating a value" $ do
         safeList <- L.fromList listType [42]
-        result <- L.add safeList 42
-        result `shouldBe` False
+        L.add safeList 42
+        L.add safeList 42
 
         list <- L.toPureList safeList
-        list `shouldBe` [42]
+        list `shouldBe` [42, 42, 42]
 
 testSimpleRemovals listType = do
     it "should not remove missing element on list" $ do
@@ -78,6 +78,29 @@ testSimpleRemovals listType = do
         list <- L.toPureList safeList
         list `shouldBe` [1, 3]
 
+    it "should remove duplicate values one by one" $ do
+        safeList <- L.fromList listType [42, 42, 42]
+
+        result <- L.remove safeList 42
+        result `shouldBe` True
+        list <- L.toPureList safeList
+        list `shouldBe` [42, 42]
+
+        result <- L.remove safeList 42
+        result `shouldBe` True
+        list <- L.toPureList safeList
+        list `shouldBe` [42]
+
+        result <- L.remove safeList 42
+        result `shouldBe` True
+        list <- L.toPureList safeList
+        list `shouldBe` []
+
+        result <- L.remove safeList 42
+        result `shouldBe` False
+        list <- L.toPureList safeList
+        list `shouldBe` []
+
 testSimpleContains listType = do
     it "should not find element not in list" $ do
         forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
@@ -102,7 +125,6 @@ testSimpleMix listType = do
             result `shouldBe` False
 
             result <- L.add safeList 42
-            result `shouldBe` True
 
             result <- L.contains safeList 42
             result `shouldBe` True

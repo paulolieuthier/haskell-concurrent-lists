@@ -12,6 +12,6 @@ module ThreadSafeList
 class ThreadSafeList l a where
     newEmptyList :: IO (l a)
     toPureList :: l a -> IO [a]
-    add :: l a -> a -> IO Bool
+    add :: l a -> a -> IO ()
     remove :: l a -> a -> IO Bool
     contains :: l a -> a -> IO Bool
