@@ -1,4 +1,8 @@
+import Control.Concurrent
+import Control.Concurrent.MVar
 import Data.Foldable
+import Data.Traversable
+import GHC.Conc (getNumProcessors)
 import Test.Hspec
 import Test.QuickCheck
 
@@ -12,6 +16,7 @@ main = hspec $ do
             testSimpleRemovals listType
             testSimpleContains listType
             testSimpleMix listType
+            testSimpleParallelScenarios listType
 
 testSimpleInsertions listType = do
     it "should insert in empty list" $ do
@@ -134,3 +139,37 @@ testSimpleMix listType = do
 
             result <- L.contains safeList 42
             result `shouldBe` False
+
+testSimpleParallelScenarios listType = do
+    it "should respect order in parallel insertions" $ do
+        safeList <- L.newEmptyList listType
+
+        let list = reverse [1 .. 1000]
+        numProcessors <- getNumProcessors
+        locks <- forM [1 .. numProcessors] $ \_ -> newEmptyMVar
+        forM_ locks $ \lock -> forkIO $ do
+            forM_ list (L.add safeList)
+            putMVar lock ()
+
+        mapM_ takeMVar locks
+
+        pureList <- L.toPureList safeList
+        pureList `shouldBe`
+            (concat . (map (replicate numProcessors)) . reverse $ list)
+
+    it "should respect order in parallel removals" $ do
+        numProcessors <- getNumProcessors
+
+        let list = [1 .. 1000]
+        safeList <- L.fromList listType
+            (concat . (map (replicate numProcessors)) $ list)
+
+        locks <- forM [1 .. numProcessors] $ \_ -> newEmptyMVar
+        forM_ locks $ \lock -> forkIO $ do
+            forM_ list (L.remove safeList)
+            putMVar lock ()
+
+        mapM_ takeMVar locks
+
+        pureList <- L.toPureList safeList
+        pureList `shouldBe` []
