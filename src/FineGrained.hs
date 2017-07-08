@@ -29,7 +29,7 @@ data List a = Node { val :: a, next :: MVar (List a) }
 
 newEmptyList :: IO (FineGrainedList a)
 newEmptyList = do
-    return . FineGrainedList =<< newIORef =<< newMVar . Head =<< newMVar Null
+    fmap FineGrainedList . newIORef =<< newMVar . Head =<< newMVar Null
 
 toPureList :: FineGrainedList a -> IO [a]
 toPureList (FineGrainedList head) =

@@ -29,7 +29,7 @@ data List a = Node { val :: a, next :: IORef (List a) }
 
 newEmptyList :: IO (CoarseGrainedList a)
 newEmptyList = do
-    return . CoarseGrainedList =<< newMVar =<< newIORef . Head =<< newIORef Null
+    fmap CoarseGrainedList . newMVar =<< newIORef . Head =<< newIORef Null
 
 toPureList :: Eq a => CoarseGrainedList a -> IO [a]
 toPureList (CoarseGrainedList mvar) =

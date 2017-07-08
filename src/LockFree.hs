@@ -34,7 +34,7 @@ data List a = Node { val :: a, next :: Pointer a }
     deriving Eq
 
 newEmptyList :: IO (LockFreeList a)
-newEmptyList = return . LockFreeList =<< newIORef . Head =<< newIORef Null
+newEmptyList = fmap LockFreeList . newIORef . Head =<< newIORef Null
 
 toPureList :: LockFreeList a -> IO [a]
 toPureList (LockFreeList headPtr) =
@@ -131,6 +131,5 @@ contains (LockFreeList headPtr) x =
                     if y == x then return True
                     else if y > x then return False
                     else go currPtr
-
     in go headPtr
 
