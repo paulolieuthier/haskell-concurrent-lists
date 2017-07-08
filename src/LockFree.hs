@@ -17,7 +17,8 @@ import Control.Concurrent.MVar
 import Control.Monad
 import qualified ThreadSafeList as TSL
 
-newtype LockFreeList a = LockFreeList (IORef (List a))
+type Pointer a = IORef (List a)
+newtype LockFreeList a = LockFreeList (Pointer a)
 
 instance (Eq a, Ord a) => TSL.ThreadSafeList LockFreeList a where
     newEmptyList = newEmptyList
@@ -26,30 +27,28 @@ instance (Eq a, Ord a) => TSL.ThreadSafeList LockFreeList a where
     remove = remove
     contains = contains
 
-data List a = Node { val :: a, next :: IORef (List a) }
-    | DelNode { next :: IORef (List a) }
+data List a = Node { val :: a, next :: Pointer a }
+    | DelNode { next :: Pointer a }
     | Null
-    | Head { next :: IORef (List a) }
+    | Head { next :: Pointer a }
     deriving Eq
-
-type Pred a = IORef (List a)
-type Curr a = IORef (List a)
 
 newEmptyList :: IO (LockFreeList a)
 newEmptyList = return . LockFreeList =<< newIORef . Head =<< newIORef Null
 
 toPureList :: LockFreeList a -> IO [a]
-toPureList (LockFreeList headPtr) = go headPtr []
-    where
+toPureList (LockFreeList headPtr) =
+    let
         go prevPtr xs = do
             prevNode <- readIORef prevPtr
             let curPtr = next prevNode
             curNode <- readIORef curPtr
-            
+
             case curNode of
                 Node { val = y, next = nextNode } -> go curPtr (y:xs)
                 Null -> return . reverse $ xs
                 DelNode { next = nextNode } -> go curPtr xs
+    in go headPtr []
 
 atomCAS :: Eq a => IORef a -> a -> a -> IO Bool
 atomCAS ptr old new =
@@ -57,108 +56,81 @@ atomCAS ptr old new =
         if cur == old then (new, True)
         else (cur, False)
 
-window :: Ord a => LockFreeList a -> a -> IO (Maybe (Pred a, Curr a))
-window (LockFreeList head) x = go head
-    where
+window :: Ord a => LockFreeList a -> a -> IO (Pointer a, List a, Pointer a, List a, Bool)
+window (LockFreeList head) x =
+    let
         go prevPtr = do
             prevNode <- readIORef prevPtr
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
 
-            case curNode of
-                DelNode { next = nextNode } -> do
+            case currNode of
+                DelNode { next = nextPtr } -> do
                     case prevNode of
-                        Node {} -> do
-                            let newNode = Node (val prevNode) nextNode
-                            b <- atomCAS prevPtr prevNode newNode
-                            if (not b) then go head
-                            else go curPtr
-                        Head {} -> do
-                            let newNode = Head nextNode
-                            b <- atomCAS prevPtr prevNode newNode
-                            if (not b) then go head
-                            else go curPtr
                         DelNode {} -> go head
-                Node { val = y, next = nextNode } ->
-                    if (y >= x) then return . Just $ (prevPtr, curPtr)
-                    else go curPtr
-                Null -> return Nothing
+                        Head {} -> do
+                            let newPrevNode = Head nextPtr
+                            b <- atomCAS prevPtr prevNode newPrevNode
+                            if not b then go head
+                            else go currPtr
+                        Node {} -> do
+                            let newPrevNode = prevNode { next = nextPtr }
+                            b <- atomCAS prevPtr prevNode newPrevNode
+                            if not b then go head
+                            else go currPtr
+                Node { val = y, next = nextPtr } -> do
+                    if y == x then do
+                        return (prevPtr, prevNode, currPtr, currNode, True)
+                    else if y > x then do
+                        return (prevPtr, prevNode, currPtr, currNode, False)
+                    else go currPtr
+                Null -> return (prevPtr, prevNode, currPtr, currNode, False)
+    in go head
 
 add :: (Eq a, Ord a) => LockFreeList a -> a -> IO ()
-add (LockFreeList head) x = go head
-    where
-        go prevPtr = do
-            prevNode <- readIORef prevPtr
+add list x = do
+    (prevPtr, prevNode, currPtr, currNode, _) <- window list x
 
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+    let newNode = Node x currPtr
+    newPtr <- newIORef newNode
+    let newPrevNode = prevNode { next = newPtr }
 
-            let newNode = Node x curPtr
-            newPtr <- newIORef newNode
-            
-            case curNode of
-                Node { val = y, next = nextNode } -> do
-                    if (x > y) then go curPtr
-                    else do
-                        let newPredNode = prevNode { next = newPtr }
-                        b <- atomCAS prevPtr prevNode newPredNode
-                        if b then return ()
-                        else go prevPtr
-
-                Null -> do
-                    let newPredNode = prevNode { next = newPtr }
-                    b <- atomCAS prevPtr prevNode newPredNode
-                    if b then return ()
-                    else go prevPtr
-
-                DelNode { next = nextNode } ->
-                    case prevNode of
-                        Node {} -> do
-                            let new = Node (val prevNode) nextNode
-                            b <- atomCAS prevPtr prevNode new
-                            if b then go prevPtr
-                            else go head
-                        Head {} -> do
-                            let new = Head nextNode
-                            b <- atomCAS prevPtr prevNode new
-                            if b then go prevPtr
-                            else go head
-                        DelNode {} -> go head
+    b <- atomCAS prevPtr prevNode newPrevNode
+    if not b then add list x
+    else return ()
 
 remove :: (Eq a, Ord a) => LockFreeList a -> a -> IO Bool
 remove list x = do
-    win <- window list x
-    case win of
-        Nothing -> return False
-        Just (prevPtr, curPtr) -> do
-            curNode@(Node { val = y }) <- readIORef curPtr
-            if (y /= x) then return False
-            else do
-                let nextPtr = next curNode
-                b <- atomCAS curPtr curNode (DelNode { next = nextPtr })
-                if (not b) then remove list x
-                else do
-                    prevNode <- readIORef prevPtr
-                    case prevNode of
-                        Head {} -> do
-                            let newHead = Head { next = nextPtr }
-                            atomCAS prevPtr prevNode newHead
-                        Node { val = v } -> do
-                            let newNode = Node { val = v, next = nextPtr }
-                            atomCAS prevPtr prevNode newNode
-                    return True
+    (prevPtr, prevNode, currPtr, currNode, found) <- window list x
 
-contains :: Eq a => LockFreeList a -> a -> IO Bool
-contains (LockFreeList headPtr) x = go headPtr
-    where
+    if not found then return False
+    else do
+        -- if element is found, it is not tail
+        let nextPtr = next currNode
+
+        let markedCurrNode = DelNode { next = nextPtr }
+        b <- atomCAS currPtr currNode markedCurrNode
+        if not b then remove list x
+        else do
+            let newPrevNode = prevNode { next = nextPtr }
+            atomCAS prevPtr prevNode newPrevNode
+            return True
+
+contains :: (Eq a, Ord a) => LockFreeList a -> a -> IO Bool
+contains (LockFreeList headPtr) x =
+    let
         go prevPtr = do
             prevNode <- readIORef prevPtr
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
-            
-            case curNode of
-                Node { val = y, next = nextNode } ->
-                    if (x == y) then return True
-                    else go curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
+
+            case currNode of
                 Null -> return False
-                DelNode { next = nextNode } -> go curPtr
+                DelNode { next = nextPtr } -> go nextPtr
+                Node { val = y, next = nextPtr } -> do
+                    if y == x then return True
+                    else if y > x then return False
+                    else go currPtr
+
+    in go headPtr
+
