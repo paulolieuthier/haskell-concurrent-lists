@@ -13,7 +13,8 @@ import Control.Concurrent.MVar
 import Data.IORef
 import qualified ThreadSafeList as TSL
 
-newtype CoarseGrainedList a = CoarseGrainedList (MVar (IORef (List a)))
+type Pointer a = IORef (List a)
+newtype CoarseGrainedList a = CoarseGrainedList (MVar (Pointer a))
 
 instance (Eq a, Ord a) => TSL.ThreadSafeList CoarseGrainedList a where
     newEmptyList = newEmptyList
@@ -22,9 +23,9 @@ instance (Eq a, Ord a) => TSL.ThreadSafeList CoarseGrainedList a where
     remove = remove
     contains = contains
 
-data List a = Node { val :: a, next :: IORef (List a) }
+data List a = Node { val :: a, next :: Pointer a }
     | Null
-    | Head { next :: IORef (List a) }
+    | Head { next :: Pointer a }
     deriving Eq
 
 newEmptyList :: IO (CoarseGrainedList a)
@@ -44,7 +45,7 @@ toPureList (CoarseGrainedList mvar) =
                 Null -> return . reverse $ xs
     in withMVar mvar $ \head -> go head []
 
-updateNextPointer :: (IORef (List a)) -> (IORef (List a)) -> IO ()
+updateNextPointer :: (Pointer a) -> (Pointer a) -> IO ()
 updateNextPointer firstPtr newPtr = do
     node <- readIORef firstPtr
     writeIORef firstPtr (node { next = newPtr })
