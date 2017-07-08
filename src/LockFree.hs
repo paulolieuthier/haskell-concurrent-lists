@@ -41,20 +41,20 @@ toPureList (LockFreeList headPtr) =
     let
         go prevPtr xs = do
             prevNode <- readIORef prevPtr
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
 
-            case curNode of
-                Node { val = y, next = nextNode } -> go curPtr (y:xs)
+            case currNode of
+                Node { val = y, next = nextNode } -> go currPtr (y:xs)
                 Null -> return . reverse $ xs
-                DelNode { next = nextNode } -> go curPtr xs
+                DelNode { next = nextNode } -> go currPtr xs
     in go headPtr []
 
 atomCAS :: Eq a => IORef a -> a -> a -> IO Bool
 atomCAS ptr old new =
-    atomicModifyIORef ptr $ \cur ->
-        if cur == old then (new, True)
-        else (cur, False)
+    atomicModifyIORef ptr $ \curr ->
+        if curr == old then (new, True)
+        else (curr, False)
 
 window :: Ord a => LockFreeList a -> a -> IO (Pointer a, List a, Pointer a, List a, Bool)
 window (LockFreeList head) x =

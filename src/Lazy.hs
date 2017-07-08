@@ -41,19 +41,19 @@ newEmptyList = do
 toPureList :: LazyList a -> IO [a]
 toPureList (LazyList head) =
     let
-        go predPtr predNode predMVar acc = do
-            let currPtr = next predNode
-            (currNode, curMVar, currMark) <- readIORef currPtr
-            takeMVar curMVar
+        go prevPtr prevNode prevMVar acc = do
+            let currPtr = next prevNode
+            (currNode, currMVar, currMark) <- readIORef currPtr
+            takeMVar currMVar
             currMarked <- readIORef currMark
             case currNode of
                 Node { val = y, next = nextNode } -> do
                     let list = if currMarked then acc else (y:acc)
-                    putMVar predMVar ()
-                    go currPtr currNode curMVar list 
+                    putMVar prevMVar ()
+                    go currPtr currNode currMVar list 
                 Null -> do
-                    putMVar predMVar ()
-                    putMVar curMVar ()
+                    putMVar prevMVar ()
+                    putMVar currMVar ()
                     return $ reverse acc
     in do
         (startNode, startMVar, _) <- readIORef head
@@ -61,51 +61,51 @@ toPureList (LazyList head) =
         go head startNode startMVar []
 
 validate :: Eq a => (List a) -> (Pointer a) -> Mark -> Mark -> IO Bool
-validate predNode currPtr predMark currMark = do
-    predMarked <- readIORef predMark
+validate prevNode currPtr prevMark currMark = do
+    prevMarked <- readIORef prevMark
     currMarked <- readIORef currMark
 
-    return $ (not predMarked) && (not currMarked) && (next predNode == currPtr)
+    return $ (not prevMarked) && (not currMarked) && (next prevNode == currPtr)
 
 searchUnsafely :: Ord a => Pointer a -> a -> IO (PointerAndData a, PointerAndData a)
-searchUnsafely predPtr x = do
-    (predNode, predMVar, predMark) <- readIORef predPtr
-    let currPtr = next predNode
+searchUnsafely prevPtr x = do
+    (prevNode, prevMVar, prevMark) <- readIORef prevPtr
+    let currPtr = next prevNode
     (currNode, currMVar, currMark) <- readIORef currPtr
 
-    let predStuff = (predPtr, predMVar)
+    let prevStuff = (prevPtr, prevMVar)
     let currStuff = (currPtr, currMVar)
 
     case currNode of
-        Null -> return (predStuff, currStuff)
+        Null -> return (prevStuff, currStuff)
         Node { val = y } -> do
             if y < x then searchUnsafely currPtr x
-            else return (predStuff, currStuff)
+            else return (prevStuff, currStuff)
 
 add :: (Eq a, Ord a) => LazyList a -> a -> IO ()
 add list@(LazyList headPtr) x = do
-    (predStuff, currStuff) <- searchUnsafely headPtr x
-    let (predPtr, predMVar) = predStuff
+    (prevStuff, currStuff) <- searchUnsafely headPtr x
+    let (prevPtr, prevMVar) = prevStuff
     let (currPtr, currMVar) = currStuff
 
     let
-        insert predNode = do
+        insert prevNode = do
             let newNode = Node x currPtr
             newPtr <- newIORef =<< ((,,) newNode) <$> newMVar () <*> newIORef False
-            let newPredNode = predNode { next = newPtr }
-            writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> newIORef False
+            let newPredNode = prevNode { next = newPtr }
+            writeIORef prevPtr =<< ((,,) newPredNode) <$> pure prevMVar <*> newIORef False
 
         validationAndInsertion = do
-            (predNode, _, predMark) <- readIORef predPtr
+            (prevNode, _, prevMark) <- readIORef prevPtr
             (currNode, _, currMark) <- readIORef currPtr
 
-            isValid <- validate predNode currPtr predMark currMark
-            when isValid $ insert predNode
+            isValid <- validate prevNode currPtr prevMark currMark
+            when isValid $ insert prevNode
             return isValid
 
     maybeSuccessfull <- bracket_
-        (mapM_ takeMVar [predMVar, currMVar])
-        (mapM_ (flip putMVar ()) [currMVar, predMVar])
+        (mapM_ takeMVar [prevMVar, currMVar])
+        (mapM_ (flip putMVar ()) [currMVar, prevMVar])
         validationAndInsertion
 
     if maybeSuccessfull then return ()
@@ -113,35 +113,35 @@ add list@(LazyList headPtr) x = do
 
 remove :: (Eq a, Ord a) => LazyList a -> a -> IO Bool
 remove list@(LazyList headPtr) x = do
-    (predStuff, currStuff) <- searchUnsafely headPtr x
-    let (predPtr, predMVar) = predStuff
+    (prevStuff, currStuff) <- searchUnsafely headPtr x
+    let (prevPtr, prevMVar) = prevStuff
     let (currPtr, currMVar) = currStuff
 
     let
-        delete predNode predMark currNode currMark = do
+        delete prevNode prevMark currNode currMark = do
             atomicWriteIORef currMark True
-            let newPredNode = predNode { next = next currNode }
-            writeIORef predPtr =<< ((,,) newPredNode) <$> pure predMVar <*> pure predMark
+            let newPredNode = prevNode { next = next currNode }
+            writeIORef prevPtr =<< ((,,) newPredNode) <$> pure prevMVar <*> pure prevMark
 
         validationAndRemoval = do
-            (predNode, _, predMark) <- readIORef predPtr
+            (prevNode, _, prevMark) <- readIORef prevPtr
             (currNode, _, currMark) <- readIORef currPtr
 
-            isValid <- validate predNode currPtr predMark currMark
+            isValid <- validate prevNode currPtr prevMark currMark
             if not isValid then return Nothing
             else do 
                 canBeAdded <- case currNode of
                     Node { val = y } ->
                         if y == x then do
-                            delete predNode predMark currNode currMark
+                            delete prevNode prevMark currNode currMark
                             return True
                         else return False
                     Null -> return False
                 return $ Just canBeAdded
 
     maybeSuccessfull <- bracket_
-        (mapM_ takeMVar [predMVar, currMVar])
-        (mapM_ (flip putMVar ()) [currMVar, predMVar])
+        (mapM_ takeMVar [prevMVar, currMVar])
+        (mapM_ (flip putMVar ()) [currMVar, prevMVar])
         validationAndRemoval
 
     maybe (remove list x) return maybeSuccessfull

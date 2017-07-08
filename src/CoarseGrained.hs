@@ -37,11 +37,11 @@ toPureList (CoarseGrainedList mvar) =
     let
         go prevPtr xs = do
             prevNode <- readIORef prevPtr
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
             
-            case curNode of
-                Node { val = val, next = nextNode } -> go curPtr (val:xs)
+            case currNode of
+                Node { val = val, next = nextNode } -> go currPtr (val:xs)
                 Null -> return . reverse $ xs
     in withMVar mvar $ \head -> go head []
 
@@ -56,18 +56,18 @@ add (CoarseGrainedList mvar) x =
         go prevPtr = do
             prevNode <- readIORef prevPtr
 
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
 
-            let newNode = Node { val = x, next = curPtr }
+            let newNode = Node { val = x, next = currPtr }
             newPtr <- newIORef newNode
 
-            case curNode of
+            case currNode of
                 Null -> updateNextPointer prevPtr newPtr
                 Node { val = y } ->
                     if x <= y then updateNextPointer prevPtr newPtr
-                    else go curPtr
-                _ -> go curPtr
+                    else go currPtr
+                _ -> go currPtr
 
     in withMVar mvar go
 
@@ -77,15 +77,15 @@ remove (CoarseGrainedList mvar) x =
         go prevPtr = do
             prevNode <- readIORef prevPtr
 
-            let curPtr = next prevNode
-            curNode <- readIORef curPtr
+            let currPtr = next prevNode
+            currNode <- readIORef currPtr
 
-            case curNode of
+            case currNode of
                 Null -> return False
                 Node { val = y, next = nextPtr } ->
                     if x == y then updateNextPointer prevPtr nextPtr >> return True
-                    else go curPtr
-                _ -> go curPtr
+                    else go currPtr
+                _ -> go currPtr
 
     in withMVar mvar go
 

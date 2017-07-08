@@ -35,15 +35,15 @@ toPureList :: FineGrainedList a -> IO [a]
 toPureList (FineGrainedList head) =
     let
         go prevPtr prevNode acc = do
-            let curPtr = next prevNode
-            curNode <- takeMVar curPtr
-            case curNode of
+            let currPtr = next prevNode
+            currNode <- takeMVar currPtr
+            case currNode of
                 Node {val = y, next = nextNode } -> do
                     putMVar prevPtr prevNode
-                    go curPtr curNode (y:acc) 
+                    go currPtr currNode (y:acc) 
                 Null -> do
                     putMVar prevPtr prevNode
-                    putMVar curPtr curNode
+                    putMVar currPtr currNode
                     return $ reverse acc
     in do
         startPtr <- readIORef head
@@ -54,23 +54,23 @@ add :: (Eq a, Ord a) => FineGrainedList a -> a -> IO ()
 add (FineGrainedList head) x =
     let
         go prevPtr prevNode = do
-            let curPtr = next prevNode
-            curNode <- takeMVar curPtr
-            case curNode of
+            let currPtr = next prevNode
+            currNode <- takeMVar currPtr
+            case currNode of
                 Node { val = y, next = nextNode } ->
                     if (x > y) then do
                         putMVar prevPtr prevNode
-                        go curPtr curNode
+                        go currPtr currNode
                     else do
-                        let newNode = Node { val = x, next = curPtr }
+                        let newNode = Node { val = x, next = currPtr }
                         newPtr <- newMVar newNode
                         putMVar prevPtr (prevNode { next = newPtr })
-                        putMVar curPtr curNode
+                        putMVar currPtr currNode
                 Null -> do
-                    let newNode = Node { val = x, next = curPtr }
+                    let newNode = Node { val = x, next = currPtr }
                     newPtr <- newMVar newNode
                     putMVar prevPtr (prevNode { next = newPtr })
-                    putMVar curPtr curNode
+                    putMVar currPtr currNode
     in do
         startPtr <- readIORef head
         startNode <- takeMVar startPtr
@@ -80,24 +80,24 @@ remove :: (Eq a, Ord a) => FineGrainedList a -> a -> IO Bool
 remove (FineGrainedList head) x =
     let
         go prevPtr prevNode = do
-            let curPtr = next prevNode
-            curNode <- takeMVar curPtr
-            case curNode of
+            let currPtr = next prevNode
+            currNode <- takeMVar currPtr
+            case currNode of
                 Node { val = y, next = nextNode } ->
                     if (x < y) then do
-                        putMVar curPtr curNode
+                        putMVar currPtr currNode
                         putMVar prevPtr prevNode
                         return False
                     else if (x > y) then do
                         putMVar prevPtr prevNode
-                        go curPtr curNode
+                        go currPtr currNode
                     else do
-                        putMVar curPtr curNode
-                        putMVar prevPtr (prevNode { next = next curNode })
+                        putMVar currPtr currNode
+                        putMVar prevPtr (prevNode { next = next currNode })
                         return True
                 Null -> do
                     putMVar prevPtr prevNode
-                    putMVar curPtr curNode
+                    putMVar currPtr currNode
                     return False
     in do
         startPtr <- readIORef head
@@ -108,21 +108,21 @@ contains :: Eq a => FineGrainedList a -> a -> IO Bool
 contains (FineGrainedList head) x =
     let
         go prevPtr prevNode = do
-            let curPtr = next prevNode
-            curNode <- takeMVar curPtr
-            case curNode of
+            let currPtr = next prevNode
+            currNode <- takeMVar currPtr
+            case currNode of
                 Node {val = y, next = nextNode } ->
                     if (x == y)
                     then do
                         putMVar prevPtr prevNode
-                        putMVar curPtr curNode
+                        putMVar currPtr currNode
                         return True
                     else do
                         putMVar prevPtr prevNode
-                        go curPtr curNode
+                        go currPtr currNode
                 Null -> do
                     putMVar prevPtr prevNode
-                    putMVar curPtr curNode
+                    putMVar currPtr currNode
                     return False
     in do
         startPtr <- readIORef head
