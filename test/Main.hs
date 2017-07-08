@@ -3,6 +3,7 @@ import Control.Concurrent.MVar
 import Data.Foldable
 import Data.Traversable
 import GHC.Conc (getNumProcessors)
+import System.Random
 import Test.Hspec
 import Test.QuickCheck
 
@@ -17,6 +18,7 @@ main = hspec $ do
             testSimpleContains listType
             testSimpleMix listType
             testSimpleParallelScenarios listType
+            testWickedScenario listType
 
 testSimpleInsertions listType = do
     it "should insert in empty list" $ do
@@ -122,7 +124,7 @@ testSimpleContains listType = do
             result `shouldBe` True
 
 testSimpleMix listType = do
-    it "should containt at first but not after removal" $ do
+    it "should contain at first but not after removal" $ do
         forM_ [[], [41], [43], [41, 43]] $ \pureList -> do
             safeList <- L.fromList listType pureList
 
@@ -157,7 +159,7 @@ testSimpleParallelScenarios listType = do
         pureList `shouldBe`
             (concat . (map (replicate numProcessors)) . reverse $ list)
 
-    it "should respect order in parallel removals" $ do
+    it "should remove all elements in parallel" $ do
         numProcessors <- getNumProcessors
 
         let list = [1 .. 1000]
@@ -173,3 +175,36 @@ testSimpleParallelScenarios listType = do
 
         pureList <- L.toPureList safeList
         pureList `shouldBe` []
+
+testWickedScenario listType = do
+    it "should just work" $ do
+        numProcessors <- getNumProcessors
+        let numberOfAddingThreads = numProcessors - 2
+        let numOperations = 1000
+
+        list <- forM [1 .. numOperations] $ \_ -> randomRIO (40, 50) :: IO Int
+        let originalNumberOf42 = length $ filter (== 42) list
+
+        safeList <- L.fromList listType list
+
+        locks <- forM [1 .. numberOfAddingThreads] $ \_ -> newEmptyMVar 
+
+        forkIO $ forM_ [1 .. numOperations] $ \_ -> do
+            L.add safeList 41
+            L.add safeList 43
+
+        forkIO $ forM_ [1 .. numOperations] $ \_ -> do
+            L.remove safeList 41
+            L.remove safeList 43
+
+        forM_ locks $ \lock -> forkIO $ do
+            forM_ [1 .. numOperations] $ \_ -> L.add safeList 42
+            putMVar lock ()
+
+        mapM_ takeMVar locks
+
+        pureList <- L.toPureList safeList
+        let finalNumberOf42 = length $ filter (== 42) pureList
+        let deltaOf42 = finalNumberOf42 - originalNumberOf42
+
+        deltaOf42 `shouldBe` (numOperations * numberOfAddingThreads)
