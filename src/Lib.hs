@@ -31,7 +31,8 @@ data ListType = CoarseGrained
 allTypes :: [ListType]
 allTypes = [(minBound :: ListType) ..]
 
-data ThreadSafeList a = forall l. TSL.ThreadSafeList l a => ThreadSafeList (l a)
+data ThreadSafeList a =
+    forall l. TSL.ThreadSafeList l a => ThreadSafeList (l a)
 
 newEmptyList :: Ord a => ListType -> IO (ThreadSafeList a)
 newEmptyList CoarseGrained = fmap ThreadSafeList CG.newEmptyList
@@ -43,7 +44,7 @@ newEmptyList LockFree = fmap ThreadSafeList LF.newEmptyList
 fromList :: (Ord a, Eq a) => ListType -> [a] -> IO (ThreadSafeList a)
 fromList listType list = do
     safeList <- newEmptyList listType
-    forM_ list $ \el -> add safeList el
+    forM_ list (add safeList)
     return safeList
 
 toPureList :: ThreadSafeList a -> IO [a]
