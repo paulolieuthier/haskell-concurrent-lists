@@ -20,12 +20,14 @@ import qualified FineGrained as FG
 import qualified Optimistic as O
 import qualified Lazy as L
 import qualified LockFree as LF
+import qualified STM as STM
 
 data ListType = CoarseGrained
     | FineGrained
     | Optimistic
     | Lazy
     | LockFree
+    | STM
     deriving (Show, Bounded, Enum)
 
 allTypes :: [ListType]
@@ -40,6 +42,7 @@ newEmptyList FineGrained = fmap ThreadSafeList FG.newEmptyList
 newEmptyList Optimistic = fmap ThreadSafeList O.newEmptyList
 newEmptyList Lazy = fmap ThreadSafeList L.newEmptyList
 newEmptyList LockFree = fmap ThreadSafeList LF.newEmptyList
+newEmptyList STM = fmap ThreadSafeList STM.newEmptyList
 
 fromList :: (Ord a, Eq a) => ListType -> [a] -> IO (ThreadSafeList a)
 fromList listType list = do
