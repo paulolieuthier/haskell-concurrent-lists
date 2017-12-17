@@ -1,0 +1,9 @@
+*.aux
+*.bbl
+*.blg
+*.listing
+*.lof
+*.log
+*.lot
+*.toc
+*.pdf
